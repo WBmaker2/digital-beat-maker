@@ -35,6 +35,7 @@ const stepLabelsElement = document.getElementById("step-labels");
 const playButton = document.getElementById("play-toggle");
 const clearButton = document.getElementById("clear-pattern");
 const saveSlotButton = document.getElementById("save-slot");
+const legacyShareLinkButton = document.getElementById("share-link");
 const generateShareLinkButton = document.getElementById("generate-share-link");
 const copyShareLinkButton = document.getElementById("copy-share-link");
 const restoreSlotButton = document.getElementById("restore-slot");
@@ -440,6 +441,14 @@ function storeShareCodeForCurrentSlot(shareCode) {
 
   activeSlot.shareCode = shareCode;
   saveLibrary();
+}
+
+function generateShareArtifactsForCurrentBeat() {
+  const shareCode = getShareCodeForBeat(createCurrentBeat());
+  const shareUrl = createShareUrlFromCode(shareCode);
+  updateShareArtifacts(shareUrl);
+  storeShareCodeForCurrentSlot(shareCode);
+  return shareUrl;
 }
 
 function syncTempoUi() {
@@ -883,21 +892,7 @@ saveSlotButton.addEventListener("click", () => {
   persistCurrentBeat();
 });
 
-generateShareLinkButton.addEventListener("click", () => {
-  const shareCode = getShareCodeForBeat(createCurrentBeat());
-  const shareUrl = createShareUrlFromCode(shareCode);
-  updateShareArtifacts(shareUrl);
-  storeShareCodeForCurrentSlot(shareCode);
-  setFeedback("공유 링크와 QR 코드를 만들었어요.");
-});
-
-copyShareLinkButton.addEventListener("click", async () => {
-  const shareUrl = shareUrlInput.value.trim();
-  if (!shareUrl) {
-    setFeedback("먼저 공유 링크 생성을 눌러 주세요.");
-    return;
-  }
-
+async function copyShareUrlToClipboard(shareUrl) {
   try {
     await navigator.clipboard.writeText(shareUrl);
     setFeedback("공유 링크를 복사했어요.");
@@ -906,7 +901,33 @@ copyShareLinkButton.addEventListener("click", async () => {
     shareUrlInput.select();
     setFeedback("자동 복사가 막혀 있어요. 아래 링크를 직접 복사해 주세요.");
   }
-});
+}
+
+if (generateShareLinkButton) {
+  generateShareLinkButton.addEventListener("click", () => {
+    generateShareArtifactsForCurrentBeat();
+    setFeedback("공유 링크와 QR 코드를 만들었어요.");
+  });
+}
+
+if (copyShareLinkButton) {
+  copyShareLinkButton.addEventListener("click", async () => {
+    const shareUrl = shareUrlInput.value.trim();
+    if (!shareUrl) {
+      setFeedback("먼저 공유 링크 생성을 눌러 주세요.");
+      return;
+    }
+
+    await copyShareUrlToClipboard(shareUrl);
+  });
+}
+
+if (legacyShareLinkButton) {
+  legacyShareLinkButton.addEventListener("click", async () => {
+    const shareUrl = generateShareArtifactsForCurrentBeat();
+    await copyShareUrlToClipboard(shareUrl);
+  });
+}
 
 restoreSlotButton.addEventListener("click", () => {
   loadBeatIntoComposer(getActiveSlot().beat, "slot");

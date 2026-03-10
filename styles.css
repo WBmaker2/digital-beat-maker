@@ -151,6 +151,24 @@ h3 {
   gap: 0.35rem;
 }
 
+.achievement-note {
+  margin-top: 0.75rem;
+  display: grid;
+  gap: 0.28rem;
+  padding-left: 0.1rem;
+  color: var(--text-muted);
+}
+
+.achievement-note strong {
+  font-size: 0.84rem;
+  color: var(--text-main);
+}
+
+.achievement-note span {
+  font-size: 0.84rem;
+  line-height: 1.55;
+}
+
 .toolbar {
   display: flex;
   justify-content: space-between;
