@@ -111,6 +111,7 @@ function createSlot(beat, nameHint) {
     id: `slot-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     updatedAt: Date.now(),
     beat: normalizeBeat(beat) || createStarterBeat(nameHint),
+    shareCode: "",
   };
 }
 
@@ -195,6 +196,7 @@ function ensureLibraryShape(rawLibrary) {
         id: String(slot.id),
         updatedAt: Number(slot.updatedAt) || Date.now(),
         beat: safeBeat,
+        shareCode: typeof slot.shareCode === "string" ? slot.shareCode : "",
       };
     })
     .filter(Boolean);
@@ -355,9 +357,9 @@ function getSharedBeatFromUrl() {
   return decodeBeat(encodedBeat);
 }
 
-function createShareUrl() {
+function createShareUrlFromCode(shareCode) {
   const url = new URL(window.location.href);
-  url.searchParams.set(shareParam, encodeBeat(createCurrentBeat()));
+  url.searchParams.set(shareParam, shareCode);
   return url.toString();
 }
 
@@ -396,6 +398,33 @@ function updateShareArtifacts(shareUrl) {
     qrPlaceholder.hidden = false;
     qrPlaceholder.textContent = "이 링크는 너무 길어서 QR로 만들지 못했어요. 링크를 직접 복사해 주세요.";
   }
+}
+
+function getShareCodeForBeat(beat) {
+  return encodeBeat(normalizeBeat(beat));
+}
+
+function syncSlotShareArtifacts() {
+  if (currentSource !== "slot") {
+    clearShareArtifacts();
+    return;
+  }
+
+  const activeSlot = getActiveSlot();
+  if (!activeSlot?.shareCode) {
+    clearShareArtifacts();
+    return;
+  }
+
+  const expectedShareCode = getShareCodeForBeat(activeSlot.beat);
+  if (activeSlot.shareCode !== expectedShareCode) {
+    activeSlot.shareCode = "";
+    saveLibrary();
+    clearShareArtifacts();
+    return;
+  }
+
+  updateShareArtifacts(createShareUrlFromCode(activeSlot.shareCode));
 }
 
 function syncTempoUi() {
@@ -462,7 +491,7 @@ function loadBeatIntoComposer(beat, source) {
   updateGrid();
   updateSlotOptions();
   updateModeUi();
-  clearShareArtifacts();
+  syncSlotShareArtifacts();
 }
 
 function updateActiveSlotBeat(beat) {
@@ -475,6 +504,10 @@ function updateActiveSlotBeat(beat) {
 
   activeSlot.beat = nextBeat;
   activeSlot.updatedAt = Date.now();
+
+  if (activeSlot.shareCode && activeSlot.shareCode !== getShareCodeForBeat(nextBeat)) {
+    activeSlot.shareCode = "";
+  }
 }
 
 function persistCurrentBeat() {
@@ -483,19 +516,19 @@ function persistCurrentBeat() {
     return;
   }
 
-  clearShareArtifacts();
-
   if (currentSource === "slot") {
     updateActiveSlotBeat(safeBeat);
     saveLibrary();
     updateSlotOptions();
     updateModeUi();
+    syncSlotShareArtifacts();
     setFeedback(`"${safeBeat.name}" 슬롯을 저장했어요.`);
     return;
   }
 
   sharedBeat = safeBeat;
   saveJsonToStorage(storageKeys.sharedPreview, sharedBeat);
+  clearShareArtifacts();
   setFeedback("공유 비트는 따로 보관 중이고, 내 슬롯들은 그대로 남아 있어요.");
 }
 
@@ -836,8 +869,17 @@ saveSlotButton.addEventListener("click", () => {
 });
 
 shareLinkButton.addEventListener("click", async () => {
-  const shareUrl = createShareUrl();
+  const shareCode = getShareCodeForBeat(createCurrentBeat());
+  const shareUrl = createShareUrlFromCode(shareCode);
   updateShareArtifacts(shareUrl);
+
+  if (currentSource === "slot") {
+    const activeSlot = getActiveSlot();
+    if (activeSlot) {
+      activeSlot.shareCode = shareCode;
+      saveLibrary();
+    }
+  }
 
   try {
     await navigator.clipboard.writeText(shareUrl);
