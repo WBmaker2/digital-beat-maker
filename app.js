@@ -35,7 +35,8 @@ const stepLabelsElement = document.getElementById("step-labels");
 const playButton = document.getElementById("play-toggle");
 const clearButton = document.getElementById("clear-pattern");
 const saveSlotButton = document.getElementById("save-slot");
-const shareLinkButton = document.getElementById("share-link");
+const generateShareLinkButton = document.getElementById("generate-share-link");
+const copyShareLinkButton = document.getElementById("copy-share-link");
 const restoreSlotButton = document.getElementById("restore-slot");
 const saveAsMineButton = document.getElementById("save-as-mine");
 const newSlotButton = document.getElementById("new-slot");
@@ -425,6 +426,20 @@ function syncSlotShareArtifacts() {
   }
 
   updateShareArtifacts(createShareUrlFromCode(activeSlot.shareCode));
+}
+
+function storeShareCodeForCurrentSlot(shareCode) {
+  if (currentSource !== "slot") {
+    return;
+  }
+
+  const activeSlot = getActiveSlot();
+  if (!activeSlot) {
+    return;
+  }
+
+  activeSlot.shareCode = shareCode;
+  saveLibrary();
 }
 
 function syncTempoUi() {
@@ -868,17 +883,19 @@ saveSlotButton.addEventListener("click", () => {
   persistCurrentBeat();
 });
 
-shareLinkButton.addEventListener("click", async () => {
+generateShareLinkButton.addEventListener("click", () => {
   const shareCode = getShareCodeForBeat(createCurrentBeat());
   const shareUrl = createShareUrlFromCode(shareCode);
   updateShareArtifacts(shareUrl);
+  storeShareCodeForCurrentSlot(shareCode);
+  setFeedback("공유 링크와 QR 코드를 만들었어요.");
+});
 
-  if (currentSource === "slot") {
-    const activeSlot = getActiveSlot();
-    if (activeSlot) {
-      activeSlot.shareCode = shareCode;
-      saveLibrary();
-    }
+copyShareLinkButton.addEventListener("click", async () => {
+  const shareUrl = shareUrlInput.value.trim();
+  if (!shareUrl) {
+    setFeedback("먼저 공유 링크 생성을 눌러 주세요.");
+    return;
   }
 
   try {
