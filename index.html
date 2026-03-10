@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>나만의 감성 리듬 작곡가</title>
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23ff7a59'/%3E%3Ccircle cx='22' cy='22' r='8' fill='white'/%3E%3Ccircle cx='42' cy='42' r='8' fill='white'/%3E%3Cpath d='M22 30v12M42 22v12M22 42h20' stroke='white' stroke-width='4' stroke-linecap='round'/%3E%3C/svg%3E"
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&family=Baloo+2:wght@600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="background-glow background-glow-a"></div>
+    <div class="background-glow background-glow-b"></div>
+
+    <main class="app-shell">
+      <section class="hero-card">
+        <p class="eyebrow">Digital Beat Maker</p>
+        <h1>나만의 감성 리듬 작곡가</h1>
+        <p class="hero-copy">
+          칸을 눌러 리듬을 만들고, 재생바가 지나가며 나는 소리를 들어보세요.
+          박자와 반복을 눈으로 보고 귀로 느낄 수 있어요.
+        </p>
+
+        <div class="learning-note">
+          <strong>수업 포인트</strong>
+          <span>16칸은 4박이 4번 반복되는 구조예요. 굵은 경계선을 보며 박자를 세어보세요.</span>
+        </div>
+      </section>
+
+      <section class="composer-card" aria-labelledby="composer-title">
+        <div class="toolbar">
+          <div>
+            <p class="section-label">리듬 만들기</p>
+            <h2 id="composer-title">클릭으로 만드는 16박 드럼 패턴</h2>
+          </div>
+
+          <div class="controls" aria-label="재생 컨트롤">
+            <button id="play-toggle" class="primary-button" type="button">재생</button>
+            <button id="clear-pattern" class="ghost-button" type="button">전체 지우기</button>
+          </div>
+        </div>
+
+        <div class="tempo-panel">
+          <label for="tempo-slider">속도</label>
+          <input
+            id="tempo-slider"
+            type="range"
+            min="70"
+            max="160"
+            step="1"
+            value="110"
+          />
+          <output id="tempo-value" for="tempo-slider">110 BPM</output>
+        </div>
+
+        <div class="save-share-panel" aria-labelledby="save-share-title">
+          <div class="save-share-header">
+            <div>
+              <p class="section-label">저장과 공유</p>
+              <h3 id="save-share-title">내 비트와 친구 비트를 따로 관리해요</h3>
+            </div>
+            <span id="mode-badge" class="mode-badge">내 비트</span>
+          </div>
+
+          <p id="mode-message" class="mode-message">
+            지금 만드는 비트는 이 브라우저에 자동 저장돼요.
+          </p>
+
+          <div class="pattern-meta">
+            <label class="pattern-name-field" for="pattern-name">
+              <span>패턴 이름</span>
+              <input id="pattern-name" type="text" maxlength="40" placeholder="예: 달빛 킥 리듬" />
+            </label>
+
+            <div class="slot-manager">
+              <label for="slot-select">내 비트 슬롯</label>
+              <div class="slot-controls">
+                <select id="slot-select" aria-label="내 비트 슬롯 선택"></select>
+                <button id="new-slot" class="ghost-button" type="button">새 슬롯</button>
+                <button id="delete-slot" class="ghost-button" type="button">현재 슬롯 삭제</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="share-actions" aria-label="저장 및 공유 컨트롤">
+            <button id="save-slot" class="ghost-button" type="button">현재 슬롯 저장</button>
+            <button id="share-link" class="ghost-button" type="button">공유 링크 복사</button>
+            <button id="restore-slot" class="ghost-button" type="button" hidden>내 슬롯으로 돌아가기</button>
+            <button id="save-as-mine" class="primary-button" type="button" hidden>이 비트를 새 슬롯으로 저장</button>
+          </div>
+
+          <div class="share-preview">
+            <label class="share-link-field" for="share-url">
+              <span>공유 링크</span>
+              <input
+                id="share-url"
+                type="text"
+                readonly
+                placeholder="공유 링크를 복사하면 여기에 보여요."
+              />
+            </label>
+
+            <div class="qr-card">
+              <div class="qr-frame" id="qr-frame">
+                <canvas id="share-qr" width="220" height="220" hidden></canvas>
+                <p id="qr-placeholder" class="qr-placeholder">공유 링크를 만들면 QR 코드가 여기에 보여요.</p>
+              </div>
+              <p class="qr-help">태블릿이나 휴대폰으로 QR을 찍으면 같은 비트를 바로 열 수 있어요.</p>
+            </div>
+          </div>
+
+          <p id="save-feedback" class="save-feedback" aria-live="polite"></p>
+        </div>
+
+        <div class="grid-wrapper">
+          <div class="step-labels" id="step-labels" aria-hidden="true"></div>
+          <div class="sequencer-grid" id="sequencer-grid" role="grid" aria-label="리듬 시퀀서"></div>
+        </div>
+
+        <div class="legend">
+          <span><i class="dot dot-active"></i> 소리 나는 칸</span>
+          <span><i class="dot dot-current"></i> 현재 재생 중인 박</span>
+          <span><i class="dot dot-bar"></i> 4박 구분선</span>
+        </div>
+      </section>
+
+      <section class="info-card">
+        <h2>활동 아이디어</h2>
+        <p>킥은 “쿵”, 스네어는 “짝”, 하이햇은 “치”, 박수는 “짝”처럼 생각하며 말붙임새를 만들어 보세요.</p>
+      </section>
+    </main>
+
+    <script src="qr-code.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>
