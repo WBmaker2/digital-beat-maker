@@ -92,6 +92,13 @@ input {
   color: var(--accent-deep);
 }
 
+.hero-title-row {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 0.9rem;
+}
+
 h1,
 h2,
 h3 {
@@ -103,6 +110,14 @@ h3 {
 h1 {
   font-size: clamp(2rem, 4vw, 3.8rem);
   line-height: 0.95;
+}
+
+.version-badge {
+  flex-shrink: 0;
+  margin-bottom: 0.25rem;
+  font-size: 0.9rem;
+  line-height: 1;
+  color: var(--text-muted);
 }
 
 h2 {
@@ -200,7 +215,7 @@ h3 {
 }
 
 .save-share-panel {
-  margin-top: 1rem;
+  margin-top: 1.2rem;
   padding: 1rem 1.1rem;
   border-radius: 18px;
   background: rgba(255, 255, 255, 0.72);
@@ -454,6 +469,11 @@ h3 {
   .composer-card,
   .info-card {
     border-radius: 24px;
+  }
+
+  .hero-title-row {
+    align-items: baseline;
+    flex-wrap: wrap;
   }
 
   .toolbar,
