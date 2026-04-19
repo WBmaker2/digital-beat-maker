@@ -29,6 +29,7 @@ let audioContext = null;
 let currentSource = "slot";
 let slotsLibrary = null;
 let sharedBeat = null;
+let focusedCell = { row: 0, step: 0 };
 
 const gridElement = document.getElementById("sequencer-grid");
 const stepLabelsElement = document.getElementById("step-labels");
@@ -40,6 +41,7 @@ const generateShareLinkButton = document.getElementById("generate-share-link");
 const copyShareLinkButton = document.getElementById("copy-share-link");
 const restoreSlotButton = document.getElementById("restore-slot");
 const saveAsMineButton = document.getElementById("save-as-mine");
+const restoreSharedPreviewButton = document.getElementById("restore-shared-preview");
 const newSlotButton = document.getElementById("new-slot");
 const deleteSlotButton = document.getElementById("delete-slot");
 const slotSelect = document.getElementById("slot-select");
@@ -134,7 +136,16 @@ function saveJsonToStorage(key, value) {
     window.localStorage.setItem(key, JSON.stringify(value));
     return true;
   } catch (error) {
-    setFeedback("브라우저 저장 공간에 기록하지 못했어요.");
+    setFeedback("브라우저 저장 공간에 기록하지 못했어요. 공유 링크로 백업해 주세요.");
+    return false;
+  }
+}
+
+function removeStorageItem(key) {
+  try {
+    window.localStorage.removeItem(key);
+    return true;
+  } catch (error) {
     return false;
   }
 }
@@ -431,24 +442,24 @@ function syncSlotShareArtifacts() {
 
 function storeShareCodeForCurrentSlot(shareCode) {
   if (currentSource !== "slot") {
-    return;
+    return true;
   }
 
   const activeSlot = getActiveSlot();
   if (!activeSlot) {
-    return;
+    return false;
   }
 
   activeSlot.shareCode = shareCode;
-  saveLibrary();
+  return saveLibrary();
 }
 
 function generateShareArtifactsForCurrentBeat() {
   const shareCode = getShareCodeForBeat(createCurrentBeat());
   const shareUrl = createShareUrlFromCode(shareCode);
   updateShareArtifacts(shareUrl);
-  storeShareCodeForCurrentSlot(shareCode);
-  return shareUrl;
+  const storedShareCode = storeShareCodeForCurrentSlot(shareCode);
+  return { shareUrl, storedShareCode };
 }
 
 function syncTempoUi() {
@@ -486,6 +497,7 @@ function updateModeUi() {
   saveSlotButton.hidden = sharedMode;
   restoreSlotButton.hidden = !sharedMode;
   saveAsMineButton.hidden = !sharedMode;
+  restoreSharedPreviewButton.hidden = sharedMode || !sharedBeat;
   slotSelect.disabled = sharedMode;
   newSlotButton.disabled = sharedMode;
   deleteSlotButton.disabled = sharedMode || slotsLibrary.slots.length <= 1;
@@ -542,23 +554,39 @@ function persistCurrentBeat() {
 
   if (currentSource === "slot") {
     updateActiveSlotBeat(safeBeat);
-    saveLibrary();
+    const saved = saveLibrary();
     updateSlotOptions();
     updateModeUi();
     syncSlotShareArtifacts();
-    setFeedback(`"${safeBeat.name}" 슬롯을 저장했어요.`);
-    return;
+    if (saved) {
+      setFeedback(`"${safeBeat.name}" 슬롯을 저장했어요.`);
+    } else {
+      setFeedback(`"${safeBeat.name}" 슬롯을 브라우저 저장 공간에 저장하지 못했어요. 공유 링크로 백업해 주세요.`);
+    }
+    return saved;
   }
 
   sharedBeat = safeBeat;
-  saveJsonToStorage(storageKeys.sharedPreview, sharedBeat);
+  const saved = saveJsonToStorage(storageKeys.sharedPreview, sharedBeat);
+  updateModeUi();
   clearShareArtifacts();
-  setFeedback("공유 비트는 따로 보관 중이고, 내 슬롯들은 그대로 남아 있어요.");
+  if (saved) {
+    setFeedback("공유 비트는 따로 보관 중이고, 내 슬롯들은 그대로 남아 있어요.");
+  } else {
+    setFeedback("공유 비트를 브라우저 저장 공간에 저장하지 못했어요. 공유 링크로 백업해 주세요.");
+  }
+  return saved;
 }
 
 function ensureAudioContext() {
+  const AudioContextConstructor = window.AudioContext || window.webkitAudioContext;
+  if (!AudioContextConstructor) {
+    setFeedback("이 브라우저는 오디오 재생을 지원하지 않아요. 최신 Chrome, Edge, Safari에서 다시 열어 주세요.");
+    return Promise.reject(new Error("Web Audio API is not supported."));
+  }
+
   if (!audioContext) {
-    audioContext = new window.AudioContext();
+    audioContext = new AudioContextConstructor();
   }
 
   if (audioContext.state === "suspended") {
@@ -566,6 +594,15 @@ function ensureAudioContext() {
   }
 
   return Promise.resolve();
+}
+
+async function prepareAudioContext() {
+  try {
+    await ensureAudioContext();
+    return true;
+  } catch (error) {
+    return false;
+  }
 }
 
 function createNoiseBuffer() {
@@ -687,6 +724,49 @@ function playInstrument(instrumentId, time) {
   playClap(time);
 }
 
+function getStepAriaLabel(row, step) {
+  const activeState = pattern[row][step] ? "켜짐" : "꺼짐";
+  return `${instruments[row].name} ${step + 1}번째 박, ${activeState}`;
+}
+
+function getStepButton(row, step) {
+  return gridElement.querySelector(`.step-button[data-row="${row}"][data-step="${step}"]`);
+}
+
+function moveFocusedCell(row, step) {
+  const nextRow = (row + instruments.length) % instruments.length;
+  const nextStep = (step + totalSteps) % totalSteps;
+  focusedCell = { row: nextRow, step: nextStep };
+  updateGrid();
+  getStepButton(nextRow, nextStep)?.focus();
+}
+
+function handleStepKeydown(event) {
+  const row = Number(event.currentTarget.dataset.row);
+  const step = Number(event.currentTarget.dataset.step);
+  let nextRow = row;
+  let nextStep = step;
+
+  if (event.key === "ArrowRight") {
+    nextStep += 1;
+  } else if (event.key === "ArrowLeft") {
+    nextStep -= 1;
+  } else if (event.key === "ArrowDown") {
+    nextRow += 1;
+  } else if (event.key === "ArrowUp") {
+    nextRow -= 1;
+  } else if (event.key === "Home") {
+    nextStep = 0;
+  } else if (event.key === "End") {
+    nextStep = totalSteps - 1;
+  } else {
+    return;
+  }
+
+  event.preventDefault();
+  moveFocusedCell(nextRow, nextStep);
+}
+
 function renderStepLabels() {
   const spacer = document.createElement("div");
   spacer.className = "row-label";
@@ -726,8 +806,9 @@ function renderGrid() {
       button.dataset.row = String(rowIndex);
       button.dataset.step = String(step);
       button.setAttribute("role", "gridcell");
-      button.setAttribute("aria-label", `${instrument.name} ${step + 1}번째 박`);
+      button.setAttribute("aria-label", getStepAriaLabel(rowIndex, step));
       button.setAttribute("aria-pressed", String(pattern[rowIndex][step]));
+      button.tabIndex = rowIndex === focusedCell.row && step === focusedCell.step ? 0 : -1;
 
       if (pattern[rowIndex][step]) {
         button.classList.add("is-active");
@@ -741,8 +822,17 @@ function renderGrid() {
         button.classList.add("bar-start");
       }
 
+      button.addEventListener("focus", () => {
+        focusedCell = { row: rowIndex, step };
+        updateGrid();
+      });
+
+      button.addEventListener("keydown", handleStepKeydown);
+
       button.addEventListener("click", async () => {
-        await ensureAudioContext();
+        if (!(await prepareAudioContext())) {
+          return;
+        }
         pattern[rowIndex][step] = !pattern[rowIndex][step];
         updateGrid();
         if (pattern[rowIndex][step]) {
@@ -769,6 +859,8 @@ function updateGrid() {
     button.classList.toggle("is-active", active);
     button.classList.toggle("is-current", current);
     button.setAttribute("aria-pressed", String(active));
+    button.setAttribute("aria-label", getStepAriaLabel(row, step));
+    button.tabIndex = row === focusedCell.row && step === focusedCell.step ? 0 : -1;
   });
 }
 
@@ -807,7 +899,9 @@ function startPlayback() {
 }
 
 playButton.addEventListener("click", async () => {
-  await ensureAudioContext();
+  if (!(await prepareAudioContext())) {
+    return;
+  }
   if (isPlaying) {
     stopPlayback();
     return;
@@ -852,9 +946,13 @@ newSlotButton.addEventListener("click", () => {
   const nextSlot = createSlot(createStarterBeat(getNextSlotName()), getNextSlotName());
   slotsLibrary.slots.unshift(nextSlot);
   slotsLibrary.activeSlotId = nextSlot.id;
-  saveLibrary();
+  const saved = saveLibrary();
   loadBeatIntoComposer(nextSlot.beat, "slot");
-  setFeedback(`새 슬롯 "${nextSlot.beat.name}"을 만들었어요.`);
+  if (saved) {
+    setFeedback(`새 슬롯 "${nextSlot.beat.name}"을 만들었어요.`);
+  } else {
+    setFeedback(`새 슬롯 "${nextSlot.beat.name}"을 만들었지만 브라우저 저장 공간에 저장하지 못했어요.`);
+  }
 });
 
 deleteSlotButton.addEventListener("click", () => {
@@ -879,9 +977,13 @@ deleteSlotButton.addEventListener("click", () => {
   }
 
   slotsLibrary.activeSlotId = slotsLibrary.slots[0].id;
-  saveLibrary();
+  const saved = saveLibrary();
   loadBeatIntoComposer(getActiveSlot().beat, "slot");
-  setFeedback("현재 슬롯을 삭제했어요.");
+  if (saved) {
+    setFeedback("현재 슬롯을 삭제했어요.");
+  } else {
+    setFeedback("현재 슬롯을 삭제했지만 브라우저 저장 공간에 기록하지 못했어요.");
+  }
 });
 
 saveSlotButton.addEventListener("click", () => {
@@ -905,8 +1007,12 @@ async function copyShareUrlToClipboard(shareUrl) {
 
 if (generateShareLinkButton) {
   generateShareLinkButton.addEventListener("click", () => {
-    generateShareArtifactsForCurrentBeat();
-    setFeedback("공유 링크와 QR 코드를 만들었어요.");
+    const { storedShareCode } = generateShareArtifactsForCurrentBeat();
+    if (storedShareCode) {
+      setFeedback("공유 링크와 QR 코드를 만들었어요.");
+    } else {
+      setFeedback("공유 링크와 QR 코드는 만들었지만 슬롯에는 저장하지 못했어요.");
+    }
   });
 }
 
@@ -924,7 +1030,7 @@ if (copyShareLinkButton) {
 
 if (legacyShareLinkButton) {
   legacyShareLinkButton.addEventListener("click", async () => {
-    const shareUrl = generateShareArtifactsForCurrentBeat();
+    const { shareUrl } = generateShareArtifactsForCurrentBeat();
     await copyShareUrlToClipboard(shareUrl);
   });
 }
@@ -944,23 +1050,43 @@ saveAsMineButton.addEventListener("click", () => {
   );
   slotsLibrary.slots.unshift(sharedSlot);
   slotsLibrary.activeSlotId = sharedSlot.id;
-  saveLibrary();
+  const saved = saveLibrary();
+  if (saved) {
+    removeStorageItem(storageKeys.sharedPreview);
+    sharedBeat = null;
+  }
   loadBeatIntoComposer(sharedSlot.beat, "slot");
   clearShareUrlFromAddressBar();
-  setFeedback(`"${sharedSlot.beat.name}" 새 슬롯으로 저장했어요.`);
+  if (saved) {
+    setFeedback(`"${sharedSlot.beat.name}" 새 슬롯으로 저장했어요.`);
+  } else {
+    setFeedback(`"${sharedSlot.beat.name}" 새 슬롯을 만들었지만 브라우저 저장 공간에 저장하지 못했어요.`);
+  }
+});
+
+restoreSharedPreviewButton.addEventListener("click", () => {
+  if (!sharedBeat) {
+    setFeedback("이어 볼 친구 비트가 없어요.");
+    updateModeUi();
+    return;
+  }
+
+  loadBeatIntoComposer(sharedBeat, "shared");
+  setFeedback("최근 친구 비트를 이어서 열었어요. 내 슬롯들은 그대로 남아 있어요.");
 });
 
 renderStepLabels();
 renderGrid();
 loadLibrary();
-sharedBeat = getSharedBeatFromUrl() || normalizeBeat(loadJsonFromStorage(storageKeys.sharedPreview));
+const sharedBeatFromUrl = getSharedBeatFromUrl();
+sharedBeat = sharedBeatFromUrl || normalizeBeat(loadJsonFromStorage(storageKeys.sharedPreview));
 
-if (getSharedBeatFromUrl()) {
-  saveJsonToStorage(storageKeys.sharedPreview, getSharedBeatFromUrl());
-  sharedBeat = getSharedBeatFromUrl();
+if (sharedBeatFromUrl) {
+  saveJsonToStorage(storageKeys.sharedPreview, sharedBeatFromUrl);
+  sharedBeat = sharedBeatFromUrl;
 }
 
-if (getSharedBeatFromUrl()) {
+if (sharedBeatFromUrl) {
   loadBeatIntoComposer(sharedBeat, "shared");
   setFeedback("친구가 보낸 비트를 열었어요. 내 슬롯들은 안전하게 따로 저장되어 있어요.");
 } else {

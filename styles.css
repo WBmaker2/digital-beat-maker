@@ -374,6 +374,8 @@ h3 {
 .grid-wrapper {
   margin-top: 1.2rem;
   overflow-x: auto;
+  padding-bottom: 0.2rem;
+  scrollbar-gutter: stable;
 }
 
 .step-labels,
@@ -407,6 +409,19 @@ h3 {
   justify-content: start;
   font-weight: 700;
   color: var(--text-main);
+}
+
+.step-labels .row-label,
+.grid-row .row-label {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 10px 0 16px rgba(255, 255, 255, 0.82);
+}
+
+.step-labels .row-label {
+  z-index: 3;
 }
 
 .sequencer-grid {
@@ -517,5 +532,30 @@ h3 {
   .primary-button,
   .ghost-button {
     flex: 1;
+  }
+
+  .grid-wrapper {
+    margin-left: -0.25rem;
+    margin-right: -0.25rem;
+    padding-left: 0.25rem;
+    padding-right: 0.25rem;
+  }
+
+  .step-labels,
+  .grid-row {
+    grid-template-columns: 76px repeat(16, minmax(2.35rem, 1fr));
+    gap: 0.35rem;
+    min-width: 760px;
+  }
+
+  .step-number,
+  .row-label {
+    min-height: 2.25rem;
+    border-radius: 12px;
+  }
+
+  .step-button {
+    min-height: 2.9rem;
+    border-radius: 14px;
   }
 }
