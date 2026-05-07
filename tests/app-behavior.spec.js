@@ -379,3 +379,96 @@ test("clearing while audio resume is pending cancels the stale playback start", 
   await expect(page.locator("#play-toggle")).toHaveText("재생");
   await expect(page.locator(".step-button.is-current")).toHaveCount(0);
 });
+
+test("clear pattern can be undone once", async ({ page }) => {
+  await page.goto("/");
+  await page.locator("#clear-pattern").click();
+  await toggleStep(page, 0, 0);
+  await toggleStep(page, 2, 8);
+
+  await page.locator("#clear-pattern").click();
+  await expectStepState(page, 0, 0, false);
+  await expectStepState(page, 2, 8, false);
+  await expect(page.locator("#undo-clear")).toBeVisible();
+
+  await page.locator("#undo-clear").click();
+
+  await expectStepState(page, 0, 0, true);
+  await expectStepState(page, 2, 8, true);
+  await expect(page.locator("#undo-clear")).toBeHidden();
+  await expect(page.locator("#save-feedback")).toContainText("복원");
+});
+
+test("clearing an already empty pattern keeps the previous undo snapshot", async ({ page }) => {
+  await page.goto("/");
+  await page.locator("#clear-pattern").click();
+  await toggleStep(page, 1, 1);
+  await toggleStep(page, 3, 3);
+
+  await page.locator("#clear-pattern").click();
+  await expect(page.locator("#undo-clear")).toBeVisible();
+  await page.locator("#clear-pattern").click();
+  await expect(page.locator("#undo-clear")).toBeVisible();
+
+  await page.locator("#undo-clear").click();
+
+  await expectStepState(page, 1, 1, true);
+  await expectStepState(page, 3, 3, true);
+  await expect(page.locator("#undo-clear")).toBeHidden();
+});
+
+test("slot navigation after clear prevents undo from overwriting another slot", async ({ page }) => {
+  await page.goto("/");
+  await page.locator("#clear-pattern").click();
+  await page.locator("#pattern-name").fill("Slot A Review");
+  await toggleStep(page, 1, 1);
+
+  await page.locator("#new-slot").click();
+  await page.locator("#clear-pattern").click();
+  await page.locator("#pattern-name").fill("Slot B Review");
+  await toggleStep(page, 3, 3);
+
+  const slotAValue = await page.locator("#slot-select option", { hasText: "Slot A Review" }).getAttribute("value");
+  await page.locator("#slot-select").selectOption(slotAValue);
+  await expect(page.locator("#pattern-name")).toHaveValue("Slot A Review");
+  await expectStepState(page, 1, 1, true);
+
+  await page.locator("#clear-pattern").click();
+  await expect(page.locator("#undo-clear")).toBeVisible();
+  await expectStepState(page, 1, 1, false);
+
+  const slotBValue = await page.locator("#slot-select option", { hasText: "Slot B Review" }).getAttribute("value");
+  await page.locator("#slot-select").selectOption(slotBValue);
+
+  await expect(page.locator("#undo-clear")).toBeHidden();
+  await expect(page.locator("#pattern-name")).toHaveValue("Slot B Review");
+  await expectStepState(page, 1, 1, false);
+  await expectStepState(page, 3, 3, true);
+
+  await page.locator("#slot-select").selectOption(slotAValue);
+  await expect(page.locator("#pattern-name")).toHaveValue("Slot A Review");
+  await expectStepState(page, 1, 1, false);
+  await expectStepState(page, 3, 3, false);
+});
+
+test("storage failure during clear keeps failure guidance visible", async ({ page }) => {
+  await page.addInitScript(() => {
+    const originalSetItem = Storage.prototype.setItem;
+    Object.defineProperty(Storage.prototype, "setItem", {
+      configurable: true,
+      value(key, value) {
+        if (String(key).startsWith("digital-beat-maker:")) {
+          throw new DOMException("Storage unavailable", "QuotaExceededError");
+        }
+        return originalSetItem.call(this, key, value);
+      },
+    });
+  });
+
+  await page.goto("/");
+  await page.locator("#clear-pattern").click();
+
+  await expect(page.locator("#undo-clear")).toBeVisible();
+  await expect(page.locator("#save-feedback")).toContainText(/저장하지 못|저장 공간/);
+  await expect(page.locator("#save-feedback")).not.toContainText("실수였다면");
+});

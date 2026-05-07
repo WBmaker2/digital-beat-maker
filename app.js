@@ -30,11 +30,15 @@ let currentSource = "slot";
 let slotsLibrary = null;
 let sharedBeat = null;
 let focusedCell = { row: 0, step: 0 };
+let clearSnapshot = null;
+let clearSnapshotSource = "slot";
+let clearSnapshotSlotId = null;
 
 const gridElement = document.getElementById("sequencer-grid");
 const stepLabelsElement = document.getElementById("step-labels");
 const playButton = document.getElementById("play-toggle");
 const clearButton = document.getElementById("clear-pattern");
+const undoClearButton = document.getElementById("undo-clear");
 const saveSlotButton = document.getElementById("save-slot");
 const legacyShareLinkButton = document.getElementById("share-link");
 const generateShareLinkButton = document.getElementById("generate-share-link");
@@ -125,6 +129,47 @@ function createCurrentBeat() {
     tempo,
     pattern,
   });
+}
+
+function patternHasActiveStep(beat) {
+  return beat.pattern.some((row) => row.some(Boolean));
+}
+
+function getCurrentClearContext() {
+  return {
+    source: currentSource,
+    slotId: currentSource === "slot" ? slotsLibrary?.activeSlotId || null : null,
+  };
+}
+
+function clearSnapshotMatchesCurrentContext() {
+  const currentContext = getCurrentClearContext();
+  return clearSnapshotSource === currentContext.source && clearSnapshotSlotId === currentContext.slotId;
+}
+
+function rememberClearSnapshot() {
+  const currentBeat = createCurrentBeat();
+  if (!currentBeat || !patternHasActiveStep(currentBeat)) {
+    if (clearSnapshot && clearSnapshotMatchesCurrentContext()) {
+      undoClearButton.hidden = false;
+      return;
+    }
+
+    clearUndoSnapshot();
+    return;
+  }
+
+  const currentContext = getCurrentClearContext();
+  clearSnapshot = currentBeat;
+  clearSnapshotSource = currentContext.source;
+  clearSnapshotSlotId = currentContext.slotId;
+  undoClearButton.hidden = !clearSnapshot;
+}
+
+function clearUndoSnapshot() {
+  clearSnapshot = null;
+  clearSnapshotSlotId = null;
+  undoClearButton.hidden = true;
 }
 
 function createSlot(beat, nameHint) {
@@ -706,6 +751,7 @@ function renderGrid() {
         if (!(await prepareAudioContext())) {
           return;
         }
+        clearUndoSnapshot();
         pattern[rowIndex][step] = !pattern[rowIndex][step];
         updateGrid();
         if (pattern[rowIndex][step]) {
@@ -775,19 +821,41 @@ playButton.addEventListener("click", async () => {
 });
 
 clearButton.addEventListener("click", () => {
+  rememberClearSnapshot();
+  const canUndoClear = Boolean(clearSnapshot);
   pattern = pattern.map((row) => row.map(() => false));
   stopPlayback();
   updateGrid();
+  const saved = persistCurrentBeat();
+  if (canUndoClear && saved) {
+    setFeedback("전체를 지웠어요. 실수였다면 지우기 취소를 누를 수 있어요.");
+  }
+});
+
+undoClearButton.addEventListener("click", () => {
+  if (!clearSnapshot || !clearSnapshotMatchesCurrentContext()) {
+    setFeedback("복원할 리듬이 없어요.");
+    clearUndoSnapshot();
+    return;
+  }
+
+  const beatToRestore = clearSnapshot;
+  const sourceToRestore = clearSnapshotSource;
+  loadBeatIntoComposer(beatToRestore, sourceToRestore);
   persistCurrentBeat();
+  clearUndoSnapshot();
+  setFeedback("지우기 전 리듬을 복원했어요.");
 });
 
 tempoSlider.addEventListener("input", (event) => {
+  clearUndoSnapshot();
   tempo = clampTempo(event.target.value);
   syncTempoUi();
   persistCurrentBeat();
 });
 
 patternNameInput.addEventListener("input", (event) => {
+  clearUndoSnapshot();
   patternName = sanitizeName(event.target.value, currentSource === "shared" ? "친구 리듬" : "이름 없는 리듬");
   persistCurrentBeat();
 });
@@ -797,6 +865,7 @@ slotSelect.addEventListener("change", (event) => {
     return;
   }
 
+  clearUndoSnapshot();
   slotsLibrary.activeSlotId = event.target.value;
   loadBeatIntoComposer(getActiveSlot().beat, "slot");
   setFeedback(`"${getActiveSlot().beat.name}" 슬롯으로 바꿨어요.`);
@@ -807,6 +876,7 @@ newSlotButton.addEventListener("click", () => {
     return;
   }
 
+  clearUndoSnapshot();
   const nextSlot = createSlot(createStarterBeat(getNextSlotName()), getNextSlotName());
   slotsLibrary.slots.unshift(nextSlot);
   slotsLibrary.activeSlotId = nextSlot.id;
@@ -833,6 +903,7 @@ deleteSlotButton.addEventListener("click", () => {
     return;
   }
 
+  clearUndoSnapshot();
   slotsLibrary.slots = slotsLibrary.slots.filter((slot) => slot.id !== activeSlot.id);
 
   if (slotsLibrary.slots.length === 0) {
@@ -900,12 +971,14 @@ if (legacyShareLinkButton) {
 }
 
 restoreSlotButton.addEventListener("click", () => {
+  clearUndoSnapshot();
   loadBeatIntoComposer(getActiveSlot().beat, "slot");
   clearShareUrlFromAddressBar();
   setFeedback("내 슬롯으로 돌아왔어요. 친구 비트는 내 슬롯을 덮어쓰지 않았어요.");
 });
 
 saveAsMineButton.addEventListener("click", () => {
+  clearUndoSnapshot();
   const sharedBeatCopy = createCurrentBeat();
   sharedBeatCopy.name = getUniqueSlotName(sharedBeatCopy.name);
   const sharedSlot = createSlot(
@@ -935,6 +1008,7 @@ restoreSharedPreviewButton.addEventListener("click", () => {
     return;
   }
 
+  clearUndoSnapshot();
   loadBeatIntoComposer(sharedBeat, "shared");
   setFeedback("최근 친구 비트를 이어서 열었어요. 내 슬롯들은 그대로 남아 있어요.");
 });
