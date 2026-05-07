@@ -14,7 +14,7 @@
       href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&family=Baloo+2:wght@600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="styles.css?v=1.0.1" />
+    <link rel="stylesheet" href="styles.css?v=1.0.2" />
   </head>
   <body>
     <div class="background-glow background-glow-a"></div>
@@ -25,7 +25,7 @@
         <p class="eyebrow">Digital Beat Maker</p>
         <div class="hero-title-row">
           <h1>나만의 감성 리듬 작곡가</h1>
-          <span class="version-badge">v1.0.1</span>
+          <span class="version-badge">v1.0.2</span>
         </div>
         <p class="hero-copy">
           칸을 눌러 리듬을 만들고, 재생바가 지나가며 나는 소리를 들어보세요.<br />
@@ -54,6 +54,7 @@
           <div class="controls" aria-label="재생 컨트롤">
             <button id="play-toggle" class="primary-button" type="button">재생</button>
             <button id="clear-pattern" class="ghost-button" type="button">전체 지우기</button>
+            <button id="undo-clear" class="ghost-button undo-button" type="button" hidden>지우기 취소</button>
           </div>
         </div>
 
@@ -69,6 +70,7 @@
           />
           <output id="tempo-value" for="tempo-slider">110 BPM</output>
         </div>
+        <p id="playback-progress" class="playback-progress" aria-live="polite">정지 중</p>
 
         <div class="grid-wrapper">
           <div class="step-labels" id="step-labels" aria-hidden="true"></div>
@@ -149,7 +151,8 @@
       </section>
     </main>
 
-    <script src="qr-code.js?v=1.0.1"></script>
-    <script src="app.js?v=1.0.1"></script>
+    <script src="qr-code.js?v=1.0.2"></script>
+    <script src="audio-engine.js?v=1.0.2"></script>
+    <script src="app.js?v=1.0.2"></script>
   </body>
 </html>
