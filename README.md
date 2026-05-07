@@ -36,6 +36,13 @@ python3 -m http.server 4173
 - 공유 링크는 패턴, 템포, 이름을 `?beat=` 쿼리 안에 압축해 담습니다.
 - 친구 비트는 내 슬롯을 바로 덮어쓰지 않고, 원하면 새 슬롯으로 저장할 수 있습니다.
 
+## 현장 사용 시 주의
+
+- 사생활 보호 모드, 저장 공간 제한, 학교 기기 정책에 따라 `localStorage` 저장이 실패할 수 있습니다.
+- 클립보드 복사가 막힌 환경에서는 공유 링크 입력칸을 직접 선택해 복사하면 됩니다.
+- QR 생성이 실패해도 공유 링크 자체는 계속 사용할 수 있습니다.
+- 오디오 재생은 브라우저 정책상 학생이 재생 버튼이나 셀을 한 번 누른 뒤 시작됩니다.
+
 ## 테스트
 
 처음 한 번 의존성을 설치합니다.
@@ -62,4 +69,4 @@ npm run test:behavior
 
 ## 개발 메모
 
-현재 폴더가 Git 저장소가 아닌 상태에서 GitHub 원격 파일을 동기화한 작업본일 수 있습니다. 이후 지속적으로 개발하려면 `https://github.com/WBmaker2/digital-beat-maker`를 정식 clone한 폴더를 기준으로 작업하는 것을 권장합니다.
+현재 폴더는 `https://github.com/WBmaker2/digital-beat-maker`의 `main` 브랜치를 기준으로 관리됩니다. 커밋/푸시 이후에는 GitHub Pages 배포 URL `https://wbmaker2.github.io/digital-beat-maker/`에서 동작을 확인합니다.
