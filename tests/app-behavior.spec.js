@@ -305,6 +305,17 @@ test("playback advances the visual step and clears it when stopped", async ({ pa
   await expect(page.locator(".step-button.is-current")).toHaveCount(0);
 });
 
+test("playback progress label updates while playing", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.locator("#playback-progress")).toHaveText("정지 중");
+
+  await page.locator("#play-toggle").click();
+  await expect(page.locator("#playback-progress")).toContainText(/현재 \d+박 \/ 16박/);
+
+  await page.locator("#play-toggle").click();
+  await expect(page.locator("#playback-progress")).toHaveText("정지 중");
+});
+
 test("clearing while audio resume is pending cancels the stale playback start", async ({ page }) => {
   await page.addInitScript(() => {
     class FakeAudioParam {

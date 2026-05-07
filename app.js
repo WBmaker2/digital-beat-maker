@@ -52,6 +52,7 @@ const slotSelect = document.getElementById("slot-select");
 const patternNameInput = document.getElementById("pattern-name");
 const tempoSlider = document.getElementById("tempo-slider");
 const tempoValue = document.getElementById("tempo-value");
+const playbackProgress = document.getElementById("playback-progress");
 const modeBadge = document.getElementById("mode-badge");
 const modeMessage = document.getElementById("mode-message");
 const shareUrlInput = document.getElementById("share-url");
@@ -68,10 +69,12 @@ const audioEngine = window.DigitalBeatAudio.createAudioEngine({
   },
   renderPlaybackStep() {
     updateGrid();
+    updatePlaybackProgress();
   },
   clearPlaybackStep() {
     currentStep = 0;
     updateGrid();
+    updatePlaybackProgress();
   },
   setFeedback,
 });
@@ -530,6 +533,10 @@ function syncTempoUi() {
   tempoValue.textContent = `${tempo} BPM`;
 }
 
+function updatePlaybackProgress() {
+  playbackProgress.textContent = isPlaying ? `현재 ${currentStep + 1}박 / ${totalSteps}박` : "정지 중";
+}
+
 function syncNameUi() {
   patternNameInput.value = patternName;
 }
@@ -573,6 +580,7 @@ function stopPlayback() {
   currentStep = 0;
   playButton.textContent = "재생";
   audioEngine.stop();
+  updatePlaybackProgress();
 }
 
 function loadBeatIntoComposer(beat, source) {
@@ -809,6 +817,7 @@ async function startPlayback() {
   currentStep = 0;
   playButton.textContent = "정지";
   updateGrid();
+  updatePlaybackProgress();
 }
 
 playButton.addEventListener("click", async () => {
