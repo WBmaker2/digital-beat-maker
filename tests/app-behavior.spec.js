@@ -204,3 +204,178 @@ test("slot lifecycle keeps user data isolated", async ({ page }) => {
   await expectStepState(page, 0, 0, false);
   await expectStepState(page, 2, 5, true);
 });
+
+test("playback advances the visual step and clears it when stopped", async ({ page }) => {
+  await page.addInitScript(() => {
+    class FakeAudioParam {
+      setValueAtTime() {}
+      exponentialRampToValueAtTime() {}
+    }
+
+    window.__fakeSourceNodes = [];
+
+    class FakeNode {
+      constructor(type) {
+        this.type = type;
+        this.frequency = new FakeAudioParam();
+        this.gain = new FakeAudioParam();
+        this.Q = { value: 0 };
+        this.startTimes = [];
+        this.stopTimes = [];
+      }
+      connect() {}
+      disconnect() {}
+      start(time) {
+        this.startTimes.push(time);
+      }
+      stop(time) {
+        this.stopTimes.push(time);
+      }
+    }
+
+    class FakeAudioContext {
+      constructor() {
+        this.startedAt = Date.now();
+        this.destination = {};
+        this.sampleRate = 44100;
+        this.state = "running";
+      }
+      get currentTime() {
+        return (Date.now() - this.startedAt) / 1000;
+      }
+      resume() {
+        return Promise.resolve();
+      }
+      createOscillator() {
+        const node = new FakeNode("source");
+        window.__fakeSourceNodes.push(node);
+        return node;
+      }
+      createGain() {
+        return new FakeNode("gain");
+      }
+      createBiquadFilter() {
+        return new FakeNode("filter");
+      }
+      createBufferSource() {
+        const node = new FakeNode("source");
+        window.__fakeSourceNodes.push(node);
+        return node;
+      }
+      createBuffer(channelCount, length) {
+        return {
+          getChannelData() {
+            return new Float32Array(length);
+          },
+        };
+      }
+    }
+
+    window.AudioContext = FakeAudioContext;
+  });
+
+  await page.goto("/");
+  await page.locator("#play-toggle").click();
+  await expect(page.locator(".step-button.is-current")).toHaveCount(4);
+
+  const firstStep = await page.locator(".step-button.is-current").first().getAttribute("data-step");
+  await expect(page.locator(`.step-button.is-current[data-step="${firstStep}"]`)).toHaveCount(4);
+  await page.waitForTimeout(260);
+  await expect(page.locator(".step-button.is-current")).toHaveCount(4);
+  const laterStep = await page.locator(".step-button.is-current").first().getAttribute("data-step");
+  await expect(page.locator(`.step-button.is-current[data-step="${laterStep}"]`)).toHaveCount(4);
+
+  expect(laterStep).not.toBe(firstStep);
+
+  await page.locator("#play-toggle").click();
+  await expect(page.locator("#play-toggle")).toHaveText("재생");
+  await expect(page.locator(".step-button.is-current")).toHaveCount(0);
+
+  const scheduledSources = await page.evaluate(() =>
+    window.__fakeSourceNodes.map((node) => ({
+      startCount: node.startTimes.length,
+      stopCount: node.stopTimes.length,
+    })),
+  );
+  expect(scheduledSources.length).toBeGreaterThan(0);
+  expect(scheduledSources.every((node) => node.startCount === 0 || node.stopCount >= 2)).toBe(true);
+
+  await page.waitForTimeout(180);
+  await expect(page.locator("#play-toggle")).toHaveText("재생");
+  await expect(page.locator(".step-button.is-current")).toHaveCount(0);
+});
+
+test("clearing while audio resume is pending cancels the stale playback start", async ({ page }) => {
+  await page.addInitScript(() => {
+    class FakeAudioParam {
+      setValueAtTime() {}
+      exponentialRampToValueAtTime() {}
+    }
+
+    class FakeNode {
+      constructor() {
+        this.frequency = new FakeAudioParam();
+        this.gain = new FakeAudioParam();
+        this.Q = { value: 0 };
+      }
+      connect() {}
+      disconnect() {}
+      start() {}
+      stop() {}
+    }
+
+    class FakeAudioContext {
+      constructor() {
+        this.startedAt = Date.now();
+        this.destination = {};
+        this.sampleRate = 44100;
+        this.state = "suspended";
+      }
+      get currentTime() {
+        return (Date.now() - this.startedAt) / 1000;
+      }
+      resume() {
+        window.__resumeRequested = true;
+        return new Promise((resolve) => {
+          window.__resolveAudioResume = () => {
+            this.state = "running";
+            resolve();
+          };
+        });
+      }
+      createOscillator() {
+        return new FakeNode();
+      }
+      createGain() {
+        return new FakeNode();
+      }
+      createBiquadFilter() {
+        return new FakeNode();
+      }
+      createBufferSource() {
+        return new FakeNode();
+      }
+      createBuffer(channelCount, length) {
+        return {
+          getChannelData() {
+            return new Float32Array(length);
+          },
+        };
+      }
+    }
+
+    window.AudioContext = FakeAudioContext;
+  });
+
+  await page.goto("/");
+  await page.locator("#play-toggle").click();
+  await expect.poll(() => page.evaluate(() => window.__resumeRequested)).toBe(true);
+
+  await page.locator("#clear-pattern").click();
+  await expect(page.locator("#play-toggle")).toHaveText("재생");
+  await page.evaluate(() => window.__resolveAudioResume());
+
+  await page.waitForTimeout(220);
+  await expect(page.locator("#play-toggle")).toHaveText("재생");
+  await expect(page.locator(".step-button.is-current")).toHaveCount(0);
+});

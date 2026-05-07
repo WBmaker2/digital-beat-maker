@@ -24,8 +24,8 @@ let patternName = "기본 리듬";
 let tempo = 110;
 let currentStep = 0;
 let isPlaying = false;
-let schedulerId = null;
-let audioContext = null;
+let isStartingPlayback = false;
+let playbackStartToken = 0;
 let currentSource = "slot";
 let slotsLibrary = null;
 let sharedBeat = null;
@@ -54,6 +54,23 @@ const shareUrlInput = document.getElementById("share-url");
 const shareQrImage = document.getElementById("share-qr");
 const qrPlaceholder = document.getElementById("qr-placeholder");
 const saveFeedback = document.getElementById("save-feedback");
+const audioEngine = window.DigitalBeatAudio.createAudioEngine({
+  instruments,
+  totalSteps,
+  getPattern: () => pattern,
+  getTempo: () => tempo,
+  setCurrentStep(step) {
+    currentStep = step;
+  },
+  renderPlaybackStep() {
+    updateGrid();
+  },
+  clearPlaybackStep() {
+    currentStep = 0;
+    updateGrid();
+  },
+  setFeedback,
+});
 
 function clonePattern(source) {
   return source.map((row) => [...row]);
@@ -505,14 +522,12 @@ function updateModeUi() {
 }
 
 function stopPlayback() {
+  playbackStartToken += 1;
+  isStartingPlayback = false;
   isPlaying = false;
-  if (schedulerId) {
-    window.clearTimeout(schedulerId);
-    schedulerId = null;
-  }
   currentStep = 0;
   playButton.textContent = "재생";
-  updateGrid();
+  audioEngine.stop();
 }
 
 function loadBeatIntoComposer(beat, source) {
@@ -578,150 +593,8 @@ function persistCurrentBeat() {
   return saved;
 }
 
-function ensureAudioContext() {
-  const AudioContextConstructor = window.AudioContext || window.webkitAudioContext;
-  if (!AudioContextConstructor) {
-    setFeedback("이 브라우저는 오디오 재생을 지원하지 않아요. 최신 Chrome, Edge, Safari에서 다시 열어 주세요.");
-    return Promise.reject(new Error("Web Audio API is not supported."));
-  }
-
-  if (!audioContext) {
-    audioContext = new AudioContextConstructor();
-  }
-
-  if (audioContext.state === "suspended") {
-    return audioContext.resume();
-  }
-
-  return Promise.resolve();
-}
-
 async function prepareAudioContext() {
-  try {
-    await ensureAudioContext();
-    return true;
-  } catch (error) {
-    return false;
-  }
-}
-
-function createNoiseBuffer() {
-  const bufferSize = audioContext.sampleRate * 0.25;
-  const buffer = audioContext.createBuffer(1, bufferSize, audioContext.sampleRate);
-  const channel = buffer.getChannelData(0);
-
-  for (let index = 0; index < bufferSize; index += 1) {
-    channel[index] = Math.random() * 2 - 1;
-  }
-
-  return buffer;
-}
-
-function playKick(time) {
-  const oscillator = audioContext.createOscillator();
-  const gain = audioContext.createGain();
-
-  oscillator.type = "sine";
-  oscillator.frequency.setValueAtTime(140, time);
-  oscillator.frequency.exponentialRampToValueAtTime(45, time + 0.18);
-  gain.gain.setValueAtTime(1, time);
-  gain.gain.exponentialRampToValueAtTime(0.001, time + 0.2);
-
-  oscillator.connect(gain);
-  gain.connect(audioContext.destination);
-  oscillator.start(time);
-  oscillator.stop(time + 0.2);
-}
-
-function playSnare(time) {
-  const noise = audioContext.createBufferSource();
-  const noiseFilter = audioContext.createBiquadFilter();
-  const noiseGain = audioContext.createGain();
-  const toneOsc = audioContext.createOscillator();
-  const toneGain = audioContext.createGain();
-
-  noise.buffer = createNoiseBuffer();
-  noiseFilter.type = "highpass";
-  noiseFilter.frequency.value = 1600;
-  noiseGain.gain.setValueAtTime(0.7, time);
-  noiseGain.gain.exponentialRampToValueAtTime(0.001, time + 0.16);
-
-  toneOsc.type = "triangle";
-  toneOsc.frequency.setValueAtTime(180, time);
-  toneGain.gain.setValueAtTime(0.22, time);
-  toneGain.gain.exponentialRampToValueAtTime(0.001, time + 0.1);
-
-  noise.connect(noiseFilter);
-  noiseFilter.connect(noiseGain);
-  noiseGain.connect(audioContext.destination);
-
-  toneOsc.connect(toneGain);
-  toneGain.connect(audioContext.destination);
-
-  noise.start(time);
-  noise.stop(time + 0.2);
-  toneOsc.start(time);
-  toneOsc.stop(time + 0.12);
-}
-
-function playHiHat(time) {
-  const noise = audioContext.createBufferSource();
-  const filter = audioContext.createBiquadFilter();
-  const gain = audioContext.createGain();
-
-  noise.buffer = createNoiseBuffer();
-  filter.type = "bandpass";
-  filter.frequency.value = 9000;
-  filter.Q.value = 1.2;
-  gain.gain.setValueAtTime(0.28, time);
-  gain.gain.exponentialRampToValueAtTime(0.001, time + 0.05);
-
-  noise.connect(filter);
-  filter.connect(gain);
-  gain.connect(audioContext.destination);
-
-  noise.start(time);
-  noise.stop(time + 0.06);
-}
-
-function playClap(time) {
-  [0, 0.018, 0.036].forEach((offset) => {
-    const noise = audioContext.createBufferSource();
-    const filter = audioContext.createBiquadFilter();
-    const gain = audioContext.createGain();
-
-    noise.buffer = createNoiseBuffer();
-    filter.type = "highpass";
-    filter.frequency.value = 1100;
-    gain.gain.setValueAtTime(0.45, time + offset);
-    gain.gain.exponentialRampToValueAtTime(0.001, time + offset + 0.08);
-
-    noise.connect(filter);
-    filter.connect(gain);
-    gain.connect(audioContext.destination);
-
-    noise.start(time + offset);
-    noise.stop(time + offset + 0.09);
-  });
-}
-
-function playInstrument(instrumentId, time) {
-  if (instrumentId === "kick") {
-    playKick(time);
-    return;
-  }
-
-  if (instrumentId === "snare") {
-    playSnare(time);
-    return;
-  }
-
-  if (instrumentId === "hihat") {
-    playHiHat(time);
-    return;
-  }
-
-  playClap(time);
+  return audioEngine.prepare();
 }
 
 function getStepAriaLabel(row, step) {
@@ -836,7 +709,7 @@ function renderGrid() {
         pattern[rowIndex][step] = !pattern[rowIndex][step];
         updateGrid();
         if (pattern[rowIndex][step]) {
-          playInstrument(instrument.id, audioContext.currentTime + 0.01);
+          audioEngine.playInstrumentNow(instrument.id);
         }
         persistCurrentBeat();
       });
@@ -864,30 +737,25 @@ function updateGrid() {
   });
 }
 
-function getStepDurationMs() {
-  return (60 / tempo / 4) * 1000;
-}
-
-function scheduleNextStep() {
-  if (!isPlaying) {
+async function startPlayback() {
+  if (isPlaying || isStartingPlayback) {
     return;
   }
 
-  const playbackTime = audioContext.currentTime + 0.01;
+  const startToken = playbackStartToken + 1;
+  playbackStartToken = startToken;
+  isStartingPlayback = true;
+  const started = await audioEngine.start();
 
-  instruments.forEach((instrument, rowIndex) => {
-    if (pattern[rowIndex][currentStep]) {
-      playInstrument(instrument.id, playbackTime);
+  if (startToken !== playbackStartToken) {
+    if (started) {
+      audioEngine.stop();
     }
-  });
+    return;
+  }
 
-  updateGrid();
-  currentStep = (currentStep + 1) % totalSteps;
-  schedulerId = window.setTimeout(scheduleNextStep, getStepDurationMs());
-}
-
-function startPlayback() {
-  if (isPlaying) {
+  isStartingPlayback = false;
+  if (!started) {
     return;
   }
 
@@ -895,19 +763,15 @@ function startPlayback() {
   currentStep = 0;
   playButton.textContent = "정지";
   updateGrid();
-  scheduleNextStep();
 }
 
 playButton.addEventListener("click", async () => {
-  if (!(await prepareAudioContext())) {
-    return;
-  }
-  if (isPlaying) {
+  if (isPlaying || isStartingPlayback) {
     stopPlayback();
     return;
   }
 
-  startPlayback();
+  await startPlayback();
 });
 
 clearButton.addEventListener("click", () => {

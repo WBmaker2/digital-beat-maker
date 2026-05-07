@@ -5,7 +5,7 @@
   "scripts": {
     "test": "playwright test",
     "test:behavior": "playwright test tests/app-behavior.spec.js --reporter=line",
-    "test:syntax": "node --check app.js && node --check qr-code.js",
+    "test:syntax": "node --check app.js && node --check audio-engine.js && node --check qr-code.js",
     "serve": "python3 -m http.server 4173"
   },
   "devDependencies": {
