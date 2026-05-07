@@ -1,5 +1,16 @@
 const { test, expect } = require("@playwright/test");
 
+async function toggleStep(page, row, step) {
+  await page.locator(`.step-button[data-row="${row}"][data-step="${step}"]`).click();
+}
+
+async function expectStepState(page, row, step, pressed) {
+  await expect(page.locator(`.step-button[data-row="${row}"][data-step="${step}"]`)).toHaveAttribute(
+    "aria-pressed",
+    String(pressed),
+  );
+}
+
 test("storage failures keep a failure message instead of showing a saved message", async ({ page }) => {
   await page.addInitScript(() => {
     const originalSetItem = Storage.prototype.setItem;
@@ -124,4 +135,72 @@ test("instrument labels stay visible while the mobile grid scrolls horizontally"
   const after = await page.locator(".sequencer-grid .grid-row").first().locator(".row-label").boundingBox();
 
   expect(Math.abs(after.x - before.x)).toBeLessThan(2);
+});
+
+test("share link round-trip preserves pattern, tempo, and name", async ({ page }) => {
+  await page.goto("/");
+  await page.locator("#clear-pattern").click();
+  await page.locator("#pattern-name").fill("둥근 리듬 테스트");
+  await page.locator("#tempo-slider").fill("142");
+  await toggleStep(page, 0, 1);
+  await toggleStep(page, 1, 4);
+  await toggleStep(page, 2, 7);
+  await toggleStep(page, 3, 15);
+
+  await page.locator("#generate-share-link").click();
+  const shareUrl = await page.locator("#share-url").inputValue();
+
+  await page.goto(shareUrl);
+
+  await expect(page.locator("#mode-badge")).toHaveText("친구 비트");
+  await expect(page.locator("#pattern-name")).toHaveValue("둥근 리듬 테스트");
+  await expect(page.locator("#tempo-value")).toHaveText("142 BPM");
+  await expectStepState(page, 0, 1, true);
+  await expectStepState(page, 1, 4, true);
+  await expectStepState(page, 2, 7, true);
+  await expectStepState(page, 3, 15, true);
+});
+
+test("editing a saved slot invalidates stale share artifacts until regenerated", async ({ page }) => {
+  await page.goto("/");
+  await page.locator("#generate-share-link").click();
+  const firstShareUrl = await page.locator("#share-url").inputValue();
+  await expect(page.locator("#share-qr")).toBeVisible();
+
+  await toggleStep(page, 0, 2);
+
+  await expect(page.locator("#share-url")).toHaveValue("");
+  await expect(page.locator("#share-qr")).toHaveAttribute("hidden", "");
+  await expect(page.locator("#qr-placeholder")).toBeVisible();
+
+  await page.locator("#generate-share-link").click();
+  const secondShareUrl = await page.locator("#share-url").inputValue();
+
+  expect(secondShareUrl).not.toBe(firstShareUrl);
+  await expect(page.locator("#share-qr")).toBeVisible();
+});
+
+test("slot lifecycle keeps user data isolated", async ({ page }) => {
+  await page.goto("/");
+  await page.locator("#clear-pattern").click();
+  await page.locator("#pattern-name").fill("첫 슬롯");
+  await toggleStep(page, 0, 0);
+
+  await page.locator("#new-slot").click();
+  await expect(page.locator("#pattern-name")).toHaveValue(/리듬 \d+/);
+  await page.locator("#clear-pattern").click();
+  await page.locator("#pattern-name").fill("둘째 슬롯");
+  await toggleStep(page, 2, 5);
+
+  const firstSlotValue = await page.locator("#slot-select option", { hasText: "첫 슬롯" }).getAttribute("value");
+  await page.locator("#slot-select").selectOption(firstSlotValue);
+  await expect(page.locator("#pattern-name")).toHaveValue("첫 슬롯");
+  await expectStepState(page, 0, 0, true);
+  await expectStepState(page, 2, 5, false);
+
+  const secondSlotValue = await page.locator("#slot-select option", { hasText: "둘째 슬롯" }).getAttribute("value");
+  await page.locator("#slot-select").selectOption(secondSlotValue);
+  await expect(page.locator("#pattern-name")).toHaveValue("둘째 슬롯");
+  await expectStepState(page, 0, 0, false);
+  await expectStepState(page, 2, 5, true);
 });
