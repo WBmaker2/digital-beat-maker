@@ -856,9 +856,13 @@ undoClearButton.addEventListener("click", () => {
   const beatToRestore = clearSnapshot;
   const sourceToRestore = clearSnapshotSource;
   loadBeatIntoComposer(beatToRestore, sourceToRestore);
-  persistCurrentBeat();
+  const saved = persistCurrentBeat();
   clearUndoSnapshot();
-  setFeedback("지우기 전 리듬을 복원했어요.");
+  if (saved) {
+    setFeedback("지우기 전 리듬을 복원했어요.");
+  } else {
+    setFeedback("지우기 전 리듬을 화면에 복원했지만 브라우저 저장 공간에 저장하지 못했어요. 공유 링크로 백업해 주세요.");
+  }
 });
 
 tempoSlider.addEventListener("input", (event) => {

@@ -537,3 +537,33 @@ test("storage failure during clear keeps failure guidance visible", async ({ pag
   await expect(page.locator("#save-feedback")).toContainText(/저장하지 못|저장 공간/);
   await expect(page.locator("#save-feedback")).not.toContainText("실수였다면");
 });
+
+test("storage failure during undo restore keeps backup guidance visible", async ({ page }) => {
+  await page.addInitScript(() => {
+    const originalSetItem = Storage.prototype.setItem;
+    Object.defineProperty(Storage.prototype, "setItem", {
+      configurable: true,
+      value(key, value) {
+        if (String(key).startsWith("digital-beat-maker:")) {
+          throw new DOMException("Storage unavailable", "QuotaExceededError");
+        }
+        return originalSetItem.call(this, key, value);
+      },
+    });
+  });
+
+  await page.goto("/");
+  await page.locator("#clear-pattern").click();
+  await toggleStep(page, 0, 0);
+  await page.locator("#clear-pattern").click();
+
+  await expect(page.locator("#undo-clear")).toBeVisible();
+
+  await page.locator("#undo-clear").click();
+
+  await expectStepState(page, 0, 0, true);
+  await expect(page.locator("#undo-clear")).toBeHidden();
+  await expect(page.locator("#save-feedback")).toContainText(/복원/);
+  await expect(page.locator("#save-feedback")).toContainText(/저장하지 못|저장 공간/);
+  await expect(page.locator("#save-feedback")).not.toHaveText("지우기 전 리듬을 복원했어요.");
+});
