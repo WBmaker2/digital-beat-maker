@@ -180,6 +180,60 @@ test("editing a saved slot invalidates stale share artifacts until regenerated",
   await expect(page.locator("#share-qr")).toBeVisible();
 });
 
+test("clipboard failure shows manual copy guidance", async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: {
+        writeText() {
+          return Promise.reject(new Error("Blocked clipboard"));
+        },
+      },
+    });
+  });
+
+  await page.goto("/");
+  await page.locator("#generate-share-link").click();
+  await page.locator("#copy-share-link").click();
+
+  await expect(page.locator("#share-url")).toBeFocused();
+  await expect(page.locator("#save-feedback")).toContainText("직접 복사");
+});
+
+test("missing QR generator keeps the share link usable", async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(window, "LocalQrCode", {
+      configurable: true,
+      value: undefined,
+    });
+  });
+
+  await page.goto("/");
+  await page.evaluate(() => {
+    window.LocalQrCode = undefined;
+  });
+  await page.locator("#generate-share-link").click();
+
+  await expect(page.locator("#share-url")).toHaveValue(/\?beat=/);
+  await expect(page.locator("#share-qr")).toBeHidden();
+  await expect(page.locator("#qr-placeholder")).toContainText("QR 생성기");
+});
+
+test("QR render failure shows link-only recovery guidance", async ({ page }) => {
+  await page.goto("/");
+  await page.evaluate(() => {
+    window.LocalQrCode.renderToCanvas = () => {
+      throw new Error("QR too long");
+    };
+  });
+
+  await page.locator("#generate-share-link").click();
+
+  await expect(page.locator("#share-url")).toHaveValue(/\?beat=/);
+  await expect(page.locator("#share-qr")).toBeHidden();
+  await expect(page.locator("#qr-placeholder")).toContainText("직접 복사");
+});
+
 test("slot lifecycle keeps user data isolated", async ({ page }) => {
   await page.goto("/");
   await page.locator("#clear-pattern").click();

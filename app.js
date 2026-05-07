@@ -448,9 +448,14 @@ function clearShareUrlFromAddressBar() {
   window.history.replaceState({}, "", nextUrl);
 }
 
+function setShareQrVisible(isVisible) {
+  shareQrImage.hidden = !isVisible;
+  shareQrImage.style.display = isVisible ? "block" : "none";
+}
+
 function clearShareArtifacts() {
   shareUrlInput.value = "";
-  shareQrImage.hidden = true;
+  setShareQrVisible(false);
   if (window.LocalQrCode) {
     window.LocalQrCode.clearCanvas(shareQrImage);
   }
@@ -461,7 +466,7 @@ function clearShareArtifacts() {
 function updateShareArtifacts(shareUrl) {
   shareUrlInput.value = shareUrl;
   if (!window.LocalQrCode) {
-    shareQrImage.hidden = true;
+    setShareQrVisible(false);
     qrPlaceholder.hidden = false;
     qrPlaceholder.textContent = "QR 생성기를 불러오지 못했어요. 링크는 그대로 사용할 수 있어요.";
     return;
@@ -469,10 +474,10 @@ function updateShareArtifacts(shareUrl) {
 
   try {
     window.LocalQrCode.renderToCanvas(shareUrl, shareQrImage, { size: 220, quietZone: 4 });
-    shareQrImage.hidden = false;
+    setShareQrVisible(true);
     qrPlaceholder.hidden = true;
   } catch (error) {
-    shareQrImage.hidden = true;
+    setShareQrVisible(false);
     qrPlaceholder.hidden = false;
     qrPlaceholder.textContent = "이 링크는 너무 길어서 QR로 만들지 못했어요. 링크를 직접 복사해 주세요.";
   }
